@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tactical HUD Controller</title>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
+        iframe { 
+            width: 100%; 
+            height: 100%; 
+            border: none; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            opacity: 0; 
+            transition: opacity 1.5s ease-in-out; 
+            pointer-events: none;
+        }
+        .active { 
+            opacity: 1; 
+            z-index: 10; 
+            pointer-events: auto;
+        }
+        /* Optional: Loading indicator */
+        .loader {
+            position: absolute; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%);
+            color: #00FF41; font-family: monospace;
+            z-index: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="loader">INITIALIZING HUD LINK...</div>
+    <div id="app-container"></div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const apps = [
+            { 
+                id: 'weather-dash', 
+                url: 'https://your-weather-app.railway.app', // REPLACE THIS
+                duration: 30000 // 30 seconds
+            },
+            { 
+                id: 'sec-scroll',    
+                url: 'https://your-security-scroll-app.com', // REPLACE THIS
+                duration: 15000 // 15 seconds
+            }
+        ];
+        // ---------------------
+
+        let currentIndex = 0;
+        const container = document.getElementById('app-container');
+
+        // 1. Initialize: Load all apps into hidden iframes
+        apps.forEach((app, index) => {
+            const iframe = document.createElement('iframe');
+            iframe.src = app.url;
+            iframe.id = `frame-${index}`;
+            // Mute video/audio if needed:
+            // iframe.allow = "autoplay; encrypted-media"; 
+            
+            if (index === 0) iframe.classList.add('active');
+            container.appendChild(iframe);
+        });
+
+        // 2. Rotation Logic
+        function rotate() {
+            const currentApp = apps[currentIndex];
+            const nextIndex = (currentIndex + 1) % apps.length;
+            
+            setTimeout(() => {
+                console.log(`[HUD] Switching to app index: ${nextIndex}`);
+                
+                // Fade out current
+                const currentFrame = document.getElementById(`frame-${currentIndex}`);
+                if(currentFrame) currentFrame.classList.remove('active');
+                
+                // Fade in next
+                const nextFrame = document.getElementById(`frame-${nextIndex}`);
+                if(nextFrame) nextFrame.classList.add('active');
+
+                // Update index
+                currentIndex = nextIndex;
+
+                // Loop
+                rotate();
+            }, currentApp.duration);
+        }
+
+        // Start the loop
+        rotate();
+    </script>
+</body>
+</html>
