@@ -1,0 +1,11 @@
+{
+  "name": "hud-overlay",
+  "version": "1.0.0",
+  "description": "Tactical HUD Controller - dashboard playlist overlay",
+  "scripts": {
+    "start": "serve . -l ${PORT:-3000}"
+  },
+  "dependencies": {
+    "serve": "^14.2.2"
+  }
+}
