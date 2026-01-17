@@ -1,31 +1,165 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tactical HUD Controller</title>
     <style>
         body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
-        iframe { 
-            width: 100%; 
-            height: 100%; 
-            border: none; 
-            position: absolute; 
-            top: 0; 
-            left: 0; 
-            opacity: 0; 
-            transition: opacity 1.5s ease-in-out; 
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            transition: opacity 1.5s ease-in-out;
             pointer-events: none;
         }
-        .active { 
-            opacity: 1; 
-            z-index: 10; 
+        iframe.active {
+            opacity: 1;
+            z-index: 10;
             pointer-events: auto;
         }
-        /* Optional: Loading indicator */
         .loader {
-            position: absolute; top: 50%; left: 50%; 
+            position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             color: #00FF41; font-family: monospace;
             z-index: 0;
+        }
+
+        /* Settings gear */
+        .settings-gear {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            width: 40px;
+            height: 40px;
+            border: 1px solid #00FF41;
+            background: rgba(0,0,0,0.7);
+            color: #00FF41;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 50;
+            border-radius: 6px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        .settings-gear:hover { opacity: 1; }
+        body.settings-open .settings-gear { display: none; }
+
+        /* Settings panel */
+        .settings-panel {
+            display: none;
+            position: fixed;
+            inset: 0;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .settings-panel.is-open { display: flex; }
+        .settings-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            cursor: pointer;
+        }
+        .settings-content {
+            position: relative;
+            background: #0d1117;
+            border: 1px solid #00FF41;
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 560px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .settings-content h2 {
+            margin: 0 0 16px 0;
+            color: #00FF41;
+            font-family: monospace;
+            font-size: 1.1rem;
+        }
+        .app-list { margin-bottom: 16px; }
+        .app-row {
+            display: grid;
+            grid-template-columns: 100px 1fr 80px auto;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .app-row input {
+            background: #161b22;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .app-row input:focus {
+            outline: none;
+            border-color: #00FF41;
+        }
+        .app-row .row-duration { text-align: right; }
+        .btn-remove {
+            background: transparent;
+            border: 1px solid #f85149;
+            color: #f85149;
+            padding: 6px 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .btn-remove:hover { background: rgba(248,81,73,0.15); }
+        .btn-add {
+            background: transparent;
+            border: 1px dashed #00FF41;
+            color: #00FF41;
+            padding: 8px 14px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+        .btn-add:hover { background: rgba(0,255,65,0.1); }
+        .settings-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .settings-actions .btn {
+            padding: 10px 18px;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            border: 1px solid;
+        }
+        .btn-save {
+            background: #00FF41;
+            color: #000;
+            border-color: #00FF41;
+        }
+        .btn-save:hover { opacity: 0.9; }
+        .btn-cancel {
+            background: transparent;
+            color: #8b949e;
+            border-color: #30363d;
+        }
+        .btn-cancel:hover { border-color: #8b949e; color: #e6edf3; }
+        .btn-reset {
+            background: transparent;
+            color: #d29922;
+            border-color: #d29922;
+        }
+        .btn-reset:hover { background: rgba(210,153,34,0.1); }
+        .settings-hint {
+            color: #8b949e;
+            font-size: 11px;
+            margin-top: 2px;
         }
     </style>
 </head>
@@ -33,63 +167,230 @@
     <div class="loader">INITIALIZING HUD LINK...</div>
     <div id="app-container"></div>
 
+    <button type="button" class="settings-gear" id="settings-gear" aria-label="Open settings" title="Settings (Ctrl+Shift+S)">&#9881;</button>
+
+    <div id="settings-panel" class="settings-panel" role="dialog" aria-label="Playlist settings">
+        <div class="settings-overlay" id="settings-overlay"></div>
+        <div class="settings-content">
+            <h2>Playlist Settings</h2>
+            <div id="app-list" class="app-list"></div>
+            <button type="button" class="btn-add" id="btn-add-app">+ Add App</button>
+            <p class="settings-hint">Duration is in seconds (e.g. 120 = 2 min, 300 = 5 min). At least one app required.</p>
+            <div class="settings-actions">
+                <button type="button" class="btn btn-save" id="btn-save">Save & Close</button>
+                <button type="button" class="btn btn-cancel" id="btn-cancel">Cancel</button>
+                <button type="button" class="btn btn-reset" id="btn-reset">Reset to Defaults</button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // --- CONFIGURATION ---
-        const apps = [
-            { 
-                id: 'weather-dash', 
-                url: 'https://weatherdash-devbeta.up.railway.app/#33919', // REPLACE THIS
-                duration: 120000 // 120 seconds
+        // === CONFIG ===
+        // Single source of truth: validation, storage, in-memory fallback when localStorage fails
+        var Config = {
+            CONFIG_KEY: 'hud-playlist-config',
+            DEFAULT_APPS: [
+                { id: 'weather-dash', url: 'https://weatherdash-devbeta.up.railway.app/#33919', duration: 120000 },
+                { id: 'sec-scroll', url: 'https://dev.securityscroll.com', duration: 300000 }
+            ],
+            memoryConfig: null,
+
+            validate: function (raw) {
+                if (!raw || typeof raw !== 'object' || !Array.isArray(raw.apps) || raw.apps.length === 0) return { valid: false };
+                var apps = [];
+                for (var i = 0; i < raw.apps.length; i++) {
+                    var a = raw.apps[i];
+                    if (!a || typeof a.url !== 'string' || !/^https?:\/\//i.test(a.url)) continue;
+                    var dur = (typeof a.duration === 'number' && !isNaN(a.duration)) ? Math.max(1000, Math.min(86400000, a.duration)) : 60000;
+                    var id = (typeof a.id === 'string' && a.id.trim()) ? a.id.trim() : ('app-' + i);
+                    apps.push({ id: id, url: a.url.trim(), duration: dur });
+                }
+                if (apps.length === 0) return { valid: false };
+                return { valid: true, config: { apps: apps } };
             },
-            { 
-                id: 'sec-scroll',    
-                url: 'https://dev.securityscroll.com', // REPLACE THIS
-                duration: 300000 // 5 minutes
+
+            getConfig: function () {
+                try {
+                    var s = localStorage.getItem(Config.CONFIG_KEY);
+                    if (s) {
+                        var p = JSON.parse(s);
+                        var v = Config.validate(p);
+                        if (v.valid) return v.config;
+                    }
+                } catch (e) { /* ignore */ }
+                return Config.memoryConfig || { apps: Config.DEFAULT_APPS.slice() };
+            },
+
+            setConfig: function (obj) {
+                var v = Config.validate(obj);
+                if (!v.valid) return false;
+                var toStore = v.config;
+                try {
+                    localStorage.setItem(Config.CONFIG_KEY, JSON.stringify(toStore));
+                    Config.memoryConfig = null;
+                    return true;
+                } catch (e) {
+                    Config.memoryConfig = toStore;
+                    return true;
+                }
+            },
+
+            clear: function () {
+                Config.memoryConfig = null;
+                try { localStorage.removeItem(Config.CONFIG_KEY); } catch (e) { /* ignore */ }
             }
-        ];
-        // ---------------------
+        };
 
-        let currentIndex = 0;
-        const container = document.getElementById('app-container');
+        // === ROTATION ===
+        // Iframe lifecycle, timing, transitions. Idempotent init; pause/resume for overlay.
+        var rotationTimeoutId = null, currentIndex = 0, currentApps = [];
+        var container = document.getElementById('app-container');
 
-        // 1. Initialize: Load all apps into hidden iframes
-        apps.forEach((app, index) => {
-            const iframe = document.createElement('iframe');
-            iframe.src = app.url;
-            iframe.id = `frame-${index}`;
-            // Mute video/audio if needed:
-            // iframe.allow = "autoplay; encrypted-media"; 
-            
-            if (index === 0) iframe.classList.add('active');
-            container.appendChild(iframe);
-        });
+        var Rotation = {
+            init: function () {
+                if (rotationTimeoutId) { clearTimeout(rotationTimeoutId); rotationTimeoutId = null; }
+                var cfg = Config.getConfig();
+                currentApps = cfg.apps;
+                currentIndex = 0;
+                container.innerHTML = '';
+                currentApps.forEach(function (app, i) {
+                    var iframe = document.createElement('iframe');
+                    iframe.src = app.url;
+                    iframe.id = 'frame-' + i;
+                    if (i === 0) iframe.classList.add('active');
+                    container.appendChild(iframe);
+                });
+                Rotation.rotate();
+            },
 
-        // 2. Rotation Logic
-        function rotate() {
-            const currentApp = apps[currentIndex];
-            const nextIndex = (currentIndex + 1) % apps.length;
-            
-            setTimeout(() => {
-                console.log(`[HUD] Switching to app index: ${nextIndex}`);
-                
-                // Fade out current
-                const currentFrame = document.getElementById(`frame-${currentIndex}`);
-                if(currentFrame) currentFrame.classList.remove('active');
-                
-                // Fade in next
-                const nextFrame = document.getElementById(`frame-${nextIndex}`);
-                if(nextFrame) nextFrame.classList.add('active');
+            rotate: function () {
+                if (currentApps.length === 0) return;
+                var app = currentApps[currentIndex];
+                var nextIndex = (currentIndex + 1) % currentApps.length;
+                rotationTimeoutId = setTimeout(function () {
+                    console.log('[HUD] Switching to app index: ' + nextIndex);
+                    var cur = document.getElementById('frame-' + currentIndex);
+                    if (cur) cur.classList.remove('active');
+                    var next = document.getElementById('frame-' + nextIndex);
+                    if (next) next.classList.add('active');
+                    currentIndex = nextIndex;
+                    Rotation.rotate();
+                }, app.duration);
+            },
 
-                // Update index
-                currentIndex = nextIndex;
+            pause: function () {
+                if (rotationTimeoutId) { clearTimeout(rotationTimeoutId); rotationTimeoutId = null; }
+            },
 
-                // Loop
-                rotate();
-            }, currentApp.duration);
+            resume: function () { Rotation.rotate(); }
+        };
+
+        // === OVERLAY ===
+        // Settings panel: reads/writes via Config; controls Rotation (pause/resume/init).
+        var panel = document.getElementById('settings-panel');
+        var appList = document.getElementById('app-list');
+        var gear = document.getElementById('settings-gear');
+
+        function createAppRow(app) {
+            var row = document.createElement('div');
+            row.className = 'app-row';
+            var idIn = document.createElement('input');
+            idIn.className = 'row-id';
+            idIn.placeholder = 'Name';
+            idIn.type = 'text';
+            if (app && app.id) idIn.value = app.id;
+            var urlIn = document.createElement('input');
+            urlIn.className = 'row-url';
+            urlIn.placeholder = 'https://...';
+            urlIn.type = 'text';
+            if (app && app.url) urlIn.value = app.url;
+            var durIn = document.createElement('input');
+            durIn.className = 'row-duration';
+            durIn.type = 'number';
+            durIn.min = '10';
+            durIn.max = '86400';
+            durIn.placeholder = 'sec';
+            durIn.value = app ? Math.round(app.duration / 1000) : 60;
+            var rm = document.createElement('button');
+            rm.type = 'button';
+            rm.className = 'btn-remove';
+            rm.textContent = 'Remove';
+            row.appendChild(idIn);
+            row.appendChild(urlIn);
+            row.appendChild(durIn);
+            row.appendChild(rm);
+            return row;
         }
 
-        // Start the loop
-        rotate();
+        function populateForm() {
+            appList.innerHTML = '';
+            Config.getConfig().apps.forEach(function (a) { appList.appendChild(createAppRow(a)); });
+        }
+
+        function openSettings() {
+            Rotation.pause();
+            document.body.classList.add('settings-open');
+            panel.classList.add('is-open');
+            populateForm();
+            var first = appList.querySelector('.row-url');
+            if (first) first.focus();
+        }
+
+        function closeSettings(shouldReload) {
+            panel.classList.remove('is-open');
+            document.body.classList.remove('settings-open');
+            if (shouldReload) Rotation.init();
+            else Rotation.resume();
+        }
+
+        function collectForm() {
+            var rows = appList.querySelectorAll('.app-row');
+            var apps = [];
+            for (var i = 0; i < rows.length; i++) {
+                var r = rows[i];
+                var id = (r.querySelector('.row-id').value || '').trim();
+                var url = (r.querySelector('.row-url').value || '').trim();
+                var sec = parseInt(r.querySelector('.row-duration').value, 10);
+                if (!url) continue;
+                if (!/^https?:\/\//i.test(url)) return { err: 'Invalid URL: must start with http:// or https://' };
+                if (isNaN(sec) || sec < 10 || sec > 86400) return { err: 'Duration must be between 10 and 86400 seconds' };
+                apps.push({ id: id || 'app-' + i, url: url, duration: sec * 1000 });
+            }
+            if (apps.length === 0) return { err: 'At least one app is required' };
+            return { apps: apps };
+        }
+
+        function onSave() {
+            var out = collectForm();
+            if (out.err) { alert(out.err); return; }
+            if (!Config.setConfig({ apps: out.apps })) { alert('Invalid configuration.'); return; }
+            closeSettings(true);
+        }
+
+        function onReset() {
+            if (!confirm('Reset to default playlist? This cannot be undone.')) return;
+            Config.clear();
+            closeSettings(true);
+        }
+
+        appList.addEventListener('click', function (e) {
+            if (e.target && e.target.classList.contains('btn-remove')) {
+                var row = e.target.closest('.app-row');
+                if (row) row.remove();
+            }
+        });
+        document.getElementById('btn-add-app').addEventListener('click', function () { appList.appendChild(createAppRow(null)); });
+        document.getElementById('btn-save').addEventListener('click', onSave);
+        document.getElementById('btn-cancel').addEventListener('click', function () { closeSettings(false); });
+        document.getElementById('btn-reset').addEventListener('click', onReset);
+        document.getElementById('settings-overlay').addEventListener('click', function () { closeSettings(false); });
+        gear.addEventListener('click', openSettings);
+        panel.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); closeSettings(false); } });
+        document.addEventListener('keydown', function (e) { if (e.ctrlKey && e.shiftKey && e.key === 'S') { e.preventDefault(); openSettings(); } });
+
+        // === STARTUP ===
+        Rotation.init();
+        if (window.location.search.indexOf('settings') !== -1 || window.location.hash === '#settings') { openSettings(); }
     </script>
 </body>
 </html>
