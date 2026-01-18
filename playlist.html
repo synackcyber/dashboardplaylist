@@ -112,14 +112,13 @@
         .app-list { margin-bottom: 16px; }
         .app-row {
             display: grid;
-            grid-template-columns: 100px 1fr 80px auto;
+            grid-template-columns: 100px 1fr 80px auto auto;
             gap: 8px;
             align-items: center;
             margin-bottom: 10px;
             padding: 8px;
             border-radius: 4px;
             border: 1px solid transparent;
-            cursor: pointer;
             transition: all 0.2s;
         }
         .app-row:hover {
@@ -130,10 +129,22 @@
             background: rgba(0,255,65,0.15);
             border-color: #00FF41;
         }
-        .app-row.selected::before {
-            content: '▶';
+        .btn-select {
+            background: transparent;
+            border: 1px solid #00FF41;
             color: #00FF41;
-            margin-right: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        .btn-select:hover {
+            background: rgba(0,255,65,0.15);
+        }
+        .btn-select.active {
+            background: #00FF41;
+            color: #000;
         }
         .app-row input {
             background: #161b22;
@@ -336,13 +347,19 @@
             },
 
             selectStream: function (index) {
-                if (index < 0 || index >= currentApps.length) return;
+                if (index < 0 || index >= currentApps.length) {
+                    console.log('[HUD] Invalid stream index:', index);
+                    return;
+                }
                 Rotation.pause();
                 isAutoMode = false;
                 var cur = document.getElementById('frame-' + currentIndex);
                 if (cur) cur.classList.remove('active');
                 var selected = document.getElementById('frame-' + index);
-                if (selected) selected.classList.add('active');
+                if (selected) {
+                    selected.classList.add('active');
+                    console.log('[HUD] Manually selected stream:', index, currentApps[index].id);
+                }
                 currentIndex = index;
                 updateModeUI();
             },
@@ -385,20 +402,26 @@
             rm.type = 'button';
             rm.className = 'btn-remove';
             rm.textContent = 'Remove';
-            row.appendChild(idIn);
-            row.appendChild(urlIn);
-            row.appendChild(durIn);
-            row.appendChild(rm);
             
-            // Make row clickable (but not inputs/buttons)
-            row.addEventListener('click', function(e) {
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
-                var idx = parseInt(row.dataset.index, 10);
+            var selectBtn = document.createElement('button');
+            selectBtn.type = 'button';
+            selectBtn.className = 'btn-select';
+            selectBtn.textContent = 'Show';
+            selectBtn.dataset.index = index;
+            selectBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var idx = parseInt(selectBtn.dataset.index, 10);
                 if (!isNaN(idx)) {
                     Rotation.selectStream(idx);
                     updateStreamSelectionUI();
                 }
             });
+            
+            row.appendChild(idIn);
+            row.appendChild(urlIn);
+            row.appendChild(durIn);
+            row.appendChild(selectBtn);
+            row.appendChild(rm);
             
             return row;
         }
@@ -428,10 +451,19 @@
         function updateStreamSelectionUI() {
             var rows = appList.querySelectorAll('.app-row');
             rows.forEach(function(row, i) {
+                var selectBtn = row.querySelector('.btn-select');
                 if (!isAutoMode && i === currentIndex) {
                     row.classList.add('selected');
+                    if (selectBtn) {
+                        selectBtn.classList.add('active');
+                        selectBtn.textContent = 'Showing';
+                    }
                 } else {
                     row.classList.remove('selected');
+                    if (selectBtn) {
+                        selectBtn.classList.remove('active');
+                        selectBtn.textContent = 'Show';
+                    }
                 }
             });
         }
