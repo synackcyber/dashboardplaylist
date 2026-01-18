@@ -29,8 +29,8 @@
             z-index: 0;
         }
 
-        /* Settings gear */
-        .settings-gear {
+        /* Menu trigger button */
+        .menu-trigger {
             position: fixed;
             bottom: 16px;
             right: 16px;
@@ -45,9 +45,12 @@
             border-radius: 6px;
             opacity: 0.6;
             transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .settings-gear:hover { opacity: 1; }
-        body.settings-open .settings-gear { display: none; }
+        .menu-trigger:hover { opacity: 1; }
+        body.settings-open .menu-trigger { display: none; }
 
         /* Stream list slide-out panel */
         .stream-list-panel {
@@ -74,6 +77,34 @@
             font-size: 0.9rem;
             text-transform: uppercase;
             letter-spacing: 1px;
+        }
+        .stream-list-panel .settings-button {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #30363d;
+        }
+        .stream-list-panel .btn-settings {
+            width: 100%;
+            padding: 12px;
+            background: transparent;
+            border: 1px solid #00FF41;
+            color: #00FF41;
+            font-family: monospace;
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .stream-list-panel .btn-settings:hover {
+            background: rgba(0, 255, 65, 0.1);
+        }
+        .stream-list-panel .btn-settings::before {
+            content: '⚙';
+            font-size: 16px;
         }
         .stream-list-item {
             padding: 12px;
@@ -376,9 +407,12 @@
     <div id="stream-list-panel" class="stream-list-panel">
         <h3>Streams</h3>
         <div id="stream-list-content"></div>
+        <div class="settings-button">
+            <button type="button" class="btn-settings" id="panel-settings-btn" aria-label="Open settings" title="Settings (Ctrl+Shift+S)">Settings</button>
+        </div>
     </div>
 
-    <button type="button" class="settings-gear" id="settings-gear" aria-label="Open settings" title="Settings (Ctrl+Shift+S)">&#9881;</button>
+    <button type="button" class="menu-trigger" id="menu-trigger" aria-label="Open menu" title="Menu">☰</button>
 
     <div id="settings-panel" class="settings-panel" role="dialog" aria-label="Playlist settings">
         <div class="settings-overlay" id="settings-overlay"></div>
@@ -618,7 +652,8 @@
         // Settings panel: reads/writes via Config; controls Rotation (pause/resume/init).
         var panel = document.getElementById('settings-panel');
         var appList = document.getElementById('app-list');
-        var gear = document.getElementById('settings-gear');
+        var menuTrigger = document.getElementById('menu-trigger');
+        var panelSettingsBtn = document.getElementById('panel-settings-btn');
         var streamListPanel = document.getElementById('stream-list-panel');
         var streamListContent = document.getElementById('stream-list-content');
 
@@ -788,6 +823,10 @@
             Rotation.pause();
             document.body.classList.add('settings-open');
             panel.classList.add('is-open');
+            // Hide stream list panel when settings open
+            if (streamListPanel) {
+                streamListPanel.classList.remove('visible');
+            }
             populateForm();
             var first = appList.querySelector('.row-url');
             if (first) first.focus();
@@ -963,12 +1002,19 @@
         document.getElementById('btn-cancel').addEventListener('click', function () { closeSettings(false); });
         document.getElementById('btn-reset').addEventListener('click', onReset);
         document.getElementById('settings-overlay').addEventListener('click', function () { closeSettings(false); });
-        gear.addEventListener('click', openSettings);
+        
+        // Settings button in panel
+        if (panelSettingsBtn) {
+            panelSettingsBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                openSettings();
+            });
+        }
         
         // Stream list panel hover events
-        if (gear && streamListPanel) {
-            gear.addEventListener('mouseenter', showStreamList);
-            gear.addEventListener('mouseleave', hideStreamList);
+        if (menuTrigger && streamListPanel) {
+            menuTrigger.addEventListener('mouseenter', showStreamList);
+            menuTrigger.addEventListener('mouseleave', hideStreamList);
             streamListPanel.addEventListener('mouseenter', function() {
                 if (streamListHoverTimeout) {
                     clearTimeout(streamListHoverTimeout);
