@@ -49,6 +49,68 @@
         .settings-gear:hover { opacity: 1; }
         body.settings-open .settings-gear { display: none; }
 
+        /* Stream list slide-out panel */
+        .stream-list-panel {
+            position: fixed;
+            top: 0;
+            right: -320px;
+            width: 300px;
+            height: 100vh;
+            background: rgba(13, 17, 23, 0.95);
+            border-left: 1px solid #00FF41;
+            z-index: 40;
+            transition: right 0.3s ease-in-out;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .stream-list-panel.visible {
+            right: 0;
+        }
+        .stream-list-panel h3 {
+            margin: 0 0 16px 0;
+            color: #00FF41;
+            font-family: monospace;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .stream-list-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: rgba(22, 27, 34, 0.6);
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #e6edf3;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .stream-list-item:hover {
+            background: rgba(0, 255, 65, 0.1);
+            border-color: #00FF41;
+        }
+        .stream-list-item.active {
+            background: rgba(0, 255, 65, 0.2);
+            border-color: #00FF41;
+            color: #00FF41;
+        }
+        .stream-list-item .stream-name {
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .stream-list-item .stream-url {
+            color: #8b949e;
+            font-size: 11px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .stream-list-item.active .stream-url {
+            color: #00FF41;
+        }
+
         /* Settings panel */
         .settings-panel {
             display: none;
@@ -310,6 +372,12 @@
     <div class="loader">INITIALIZING HUD LINK...</div>
     <div id="app-container"></div>
 
+    <!-- Stream list slide-out panel -->
+    <div id="stream-list-panel" class="stream-list-panel">
+        <h3>Streams</h3>
+        <div id="stream-list-content"></div>
+    </div>
+
     <button type="button" class="settings-gear" id="settings-gear" aria-label="Open settings" title="Settings (Ctrl+Shift+S)">&#9881;</button>
 
     <div id="settings-panel" class="settings-panel" role="dialog" aria-label="Playlist settings">
@@ -452,6 +520,7 @@
                 if ((!preserveState || isAutoMode) && !autoRotationDisabled) {
                     Rotation.rotate();
                 }
+                updateStreamListPanel(); // Update stream list when rotation is initialized
             },
 
             rotate: function () {
@@ -465,6 +534,7 @@
                     var next = document.getElementById('frame-' + nextIndex);
                     if (next) next.classList.add('active');
                     currentIndex = nextIndex;
+                    updateStreamListPanel(); // Update stream list to highlight active stream
                     Rotation.rotate();
                 }, app.duration);
             },
@@ -493,6 +563,7 @@
                 }
                 currentIndex = index;
                 updateModeUI(); // This will update the toggle to reflect manual mode
+                updateStreamListPanel(); // Update stream list to highlight active stream
                 Rotation.startAutoResumeTimer();
             },
 
@@ -548,6 +619,8 @@
         var panel = document.getElementById('settings-panel');
         var appList = document.getElementById('app-list');
         var gear = document.getElementById('settings-gear');
+        var streamListPanel = document.getElementById('stream-list-panel');
+        var streamListContent = document.getElementById('stream-list-content');
 
         function createAppRow(app, index) {
             var row = document.createElement('div');
@@ -673,6 +746,42 @@
                     }
                 }
             });
+            updateStreamListPanel();
+        }
+
+        function updateStreamListPanel() {
+            if (!streamListContent) return;
+            streamListContent.innerHTML = '';
+            var cfg = Config.getConfig();
+            cfg.apps.forEach(function(app, index) {
+                var item = document.createElement('div');
+                item.className = 'stream-list-item';
+                if (index === currentIndex) {
+                    item.classList.add('active');
+                }
+                item.dataset.index = index;
+                
+                var nameDiv = document.createElement('div');
+                nameDiv.className = 'stream-name';
+                nameDiv.textContent = app.id || 'Stream ' + (index + 1);
+                
+                var urlDiv = document.createElement('div');
+                urlDiv.className = 'stream-url';
+                urlDiv.textContent = app.url;
+                
+                item.appendChild(nameDiv);
+                item.appendChild(urlDiv);
+                
+                item.addEventListener('click', function() {
+                    var idx = parseInt(item.dataset.index, 10);
+                    if (!isNaN(idx)) {
+                        Rotation.selectStream(idx);
+                        updateStreamSelectionUI();
+                    }
+                });
+                
+                streamListContent.appendChild(item);
+            });
         }
 
         function openSettings() {
@@ -682,6 +791,29 @@
             populateForm();
             var first = appList.querySelector('.row-url');
             if (first) first.focus();
+        }
+
+        // Stream list panel hover handlers
+        var streamListHoverTimeout = null;
+        function showStreamList() {
+            if (streamListHoverTimeout) {
+                clearTimeout(streamListHoverTimeout);
+                streamListHoverTimeout = null;
+            }
+            if (streamListPanel) {
+                streamListPanel.classList.add('visible');
+                updateStreamListPanel();
+            }
+        }
+        function hideStreamList() {
+            if (streamListHoverTimeout) {
+                clearTimeout(streamListHoverTimeout);
+            }
+            streamListHoverTimeout = setTimeout(function() {
+                if (streamListPanel) {
+                    streamListPanel.classList.remove('visible');
+                }
+            }, 200); // Small delay to allow moving from button to panel
         }
         
 
@@ -832,6 +964,20 @@
         document.getElementById('btn-reset').addEventListener('click', onReset);
         document.getElementById('settings-overlay').addEventListener('click', function () { closeSettings(false); });
         gear.addEventListener('click', openSettings);
+        
+        // Stream list panel hover events
+        if (gear && streamListPanel) {
+            gear.addEventListener('mouseenter', showStreamList);
+            gear.addEventListener('mouseleave', hideStreamList);
+            streamListPanel.addEventListener('mouseenter', function() {
+                if (streamListHoverTimeout) {
+                    clearTimeout(streamListHoverTimeout);
+                    streamListHoverTimeout = null;
+                }
+            });
+            streamListPanel.addEventListener('mouseleave', hideStreamList);
+        }
+        
         panel.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); closeSettings(false); } });
         document.addEventListener('keydown', function (e) { if (e.ctrlKey && e.shiftKey && e.key === 'S') { e.preventDefault(); openSettings(); } });
 
@@ -842,6 +988,7 @@
 
         // === STARTUP ===
         Rotation.init();
+        updateStreamListPanel(); // Initialize stream list panel
         if (window.location.search.indexOf('settings') !== -1 || window.location.hash === '#settings') { openSettings(); }
     </script>
 </body>
