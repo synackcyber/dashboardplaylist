@@ -495,8 +495,9 @@
             startAutoResumeTimer: function () {
                 Rotation.stopAutoResumeTimer();
                 if (autoResumeTimeout <= 0) return; // disabled
+                if (autoRotationDisabled) return; // auto rotation is disabled
                 autoResumeTimeoutId = setTimeout(function () {
-                    if (!isAutoMode) {
+                    if (!isAutoMode && !autoRotationDisabled) {
                         console.log('[HUD] Auto-resuming rotation after idle timeout');
                         Rotation.enableAuto();
                     }
