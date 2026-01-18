@@ -89,25 +89,16 @@
             padding-bottom: 16px;
             border-bottom: 1px solid #30363d;
         }
-        .btn-auto {
-            background: transparent;
-            border: 2px solid #00FF41;
-            color: #00FF41;
-            padding: 10px 20px;
-            cursor: pointer;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: 600;
+        .mode-control .toggle-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .mode-control .toggle-label {
+            color: #e6edf3;
+            font-size: 13px;
             font-family: monospace;
-            width: 100%;
-            transition: all 0.2s;
-        }
-        .btn-auto:hover {
-            background: rgba(0,255,65,0.1);
-        }
-        .btn-auto.active {
-            background: #00FF41;
-            color: #000;
+            flex: 1;
         }
         .app-list { margin-bottom: 16px; }
         .app-row {
@@ -314,7 +305,13 @@
         <div class="settings-content">
             <h2>Playlist Settings</h2>
             <div class="mode-control">
-                <button type="button" class="btn-auto" id="btn-auto">A - Auto Rotation</button>
+                <div class="toggle-header">
+                    <span class="toggle-label">Auto Rotation:</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="auto-rotation-enabled">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
             </div>
             <div class="auto-resume-setting">
                 <div class="toggle-header">
@@ -476,7 +473,7 @@
                     console.log('[HUD] Manually selected stream:', index, currentApps[index].id);
                 }
                 currentIndex = index;
-                updateModeUI();
+                updateModeUI(); // This will update the toggle to reflect manual mode
                 Rotation.startAutoResumeTimer();
             },
 
@@ -597,15 +594,9 @@
         }
 
         function updateModeUI() {
-            var btnAuto = document.getElementById('btn-auto');
-            if (btnAuto) {
-                if (isAutoMode) {
-                    btnAuto.classList.add('active');
-                    btnAuto.textContent = 'A - Auto Rotation (Active)';
-                } else {
-                    btnAuto.classList.remove('active');
-                    btnAuto.textContent = 'A - Auto Rotation';
-                }
+            var toggleAuto = document.getElementById('auto-rotation-enabled');
+            if (toggleAuto) {
+                toggleAuto.checked = isAutoMode;
             }
         }
 
@@ -638,8 +629,14 @@
             if (first) first.focus();
         }
         
-        function onAutoClick() {
-            Rotation.enableAuto();
+        function onAutoToggle(e) {
+            if (e.target.checked) {
+                Rotation.enableAuto();
+            } else {
+                // Toggle was turned off - pause rotation and stay on current stream
+                Rotation.pause();
+                isAutoMode = false;
+            }
             updateStreamSelectionUI();
         }
 
@@ -739,7 +736,7 @@
             var newIndex = appList.querySelectorAll('.app-row').length;
             appList.appendChild(createAppRow(null, newIndex)); 
         });
-        document.getElementById('btn-auto').addEventListener('click', onAutoClick);
+        document.getElementById('auto-rotation-enabled').addEventListener('change', onAutoToggle);
         document.getElementById('auto-resume-enabled').addEventListener('change', function(e) {
             var timeInputGroup = document.getElementById('time-input-group');
             if (timeInputGroup) {
