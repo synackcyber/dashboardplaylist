@@ -265,6 +265,18 @@
             transform: translateX(26px);
             background-color: #000;
         }
+        .toggle-switch input:disabled + .toggle-slider {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #21262d;
+            border-color: #30363d;
+        }
+        .toggle-switch input:disabled + .toggle-slider:before {
+            background-color: #484f58;
+        }
+        .auto-resume-setting.disabled {
+            opacity: 0.6;
+        }
         .auto-resume-setting .time-input-group {
             display: flex;
             align-items: center;
@@ -595,28 +607,39 @@
             
             // Disable Auto Rotation toggle
             var disableAutoToggle = document.getElementById('disable-auto-rotation');
+            var isAutoRotationDisabled = (cfg.autoRotationDisabled === true);
             if (disableAutoToggle) {
-                disableAutoToggle.checked = (cfg.autoRotationDisabled === true);
+                disableAutoToggle.checked = isAutoRotationDisabled;
             }
             
             // Auto-resume settings
             var toggleEnabled = document.getElementById('auto-resume-enabled');
             var timeoutInput = document.getElementById('auto-resume-timeout');
             var timeInputGroup = document.getElementById('time-input-group');
+            var autoResumeSetting = document.querySelector('.auto-resume-setting');
             var savedTimeout = (cfg.autoResumeTimeout !== undefined && cfg.autoResumeTimeout !== null) ? cfg.autoResumeTimeout : 10000;
             var isEnabled = savedTimeout > 0;
             
             if (toggleEnabled) {
                 toggleEnabled.checked = isEnabled;
+                toggleEnabled.disabled = isAutoRotationDisabled; // Disable if auto rotation is disabled
             }
             if (timeoutInput) {
                 timeoutInput.value = isEnabled ? Math.round(savedTimeout / 1000) : 10;
+                timeoutInput.disabled = isAutoRotationDisabled; // Disable if auto rotation is disabled
             }
             if (timeInputGroup) {
-                if (isEnabled) {
+                if (isEnabled && !isAutoRotationDisabled) {
                     timeInputGroup.classList.remove('hidden');
                 } else {
                     timeInputGroup.classList.add('hidden');
+                }
+            }
+            if (autoResumeSetting) {
+                if (isAutoRotationDisabled) {
+                    autoResumeSetting.classList.add('disabled');
+                } else {
+                    autoResumeSetting.classList.remove('disabled');
                 }
             }
             updateModeUI();
@@ -772,14 +795,35 @@
         });
         document.getElementById('disable-auto-rotation').addEventListener('change', function(e) {
             autoRotationDisabled = e.target.checked;
+            var autoResumeToggle = document.getElementById('auto-resume-enabled');
+            var timeoutInput = document.getElementById('auto-resume-timeout');
+            var timeInputGroup = document.getElementById('time-input-group');
+            var autoResumeSetting = document.querySelector('.auto-resume-setting');
+            
             if (autoRotationDisabled) {
                 // Disable auto rotation - pause and stop
                 Rotation.pause();
                 isAutoMode = false;
-                Rotation.stopAutoResumeTimer();
+                Rotation.stopAutoResumeTimer(); // Stop any auto-resume timers
+                
+                // Disable auto-resume toggle and input
+                if (autoResumeToggle) autoResumeToggle.disabled = true;
+                if (timeoutInput) timeoutInput.disabled = true;
+                if (timeInputGroup) timeInputGroup.classList.add('hidden');
+                if (autoResumeSetting) autoResumeSetting.classList.add('disabled');
             } else {
                 // Re-enable auto rotation - can start if not in manual mode
                 // Don't auto-start, let user control it
+                // Note: auto-resume timer will work again if mouse stops moving
+                
+                // Enable auto-resume toggle and input
+                if (autoResumeToggle) autoResumeToggle.disabled = false;
+                if (timeoutInput) timeoutInput.disabled = false;
+                if (autoResumeSetting) autoResumeSetting.classList.remove('disabled');
+                // Show time input if auto-resume is enabled
+                if (autoResumeToggle && autoResumeToggle.checked && timeInputGroup) {
+                    timeInputGroup.classList.remove('hidden');
+                }
             }
             updateModeUI();
         });
