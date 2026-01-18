@@ -355,23 +355,27 @@
         var autoResumeTimeout = 10000; // default 10 seconds in milliseconds
 
         var Rotation = {
-            init: function () {
+            init: function (preserveState) {
                 if (rotationTimeoutId) { clearTimeout(rotationTimeoutId); rotationTimeoutId = null; }
                 if (autoResumeTimeoutId) { clearTimeout(autoResumeTimeoutId); autoResumeTimeoutId = null; }
                 var cfg = Config.getConfig();
                 currentApps = cfg.apps;
                 autoResumeTimeout = cfg.autoResumeTimeout || 10000;
-                currentIndex = 0;
-                isAutoMode = true;
+                if (!preserveState) {
+                    currentIndex = 0;
+                    isAutoMode = true;
+                }
                 container.innerHTML = '';
                 currentApps.forEach(function (app, i) {
                     var iframe = document.createElement('iframe');
                     iframe.src = app.url;
                     iframe.id = 'frame-' + i;
-                    if (i === 0) iframe.classList.add('active');
+                    if (i === currentIndex) iframe.classList.add('active');
                     container.appendChild(iframe);
                 });
-                Rotation.rotate();
+                if (!preserveState || isAutoMode) {
+                    Rotation.rotate();
+                }
             },
 
             rotate: function () {
@@ -568,8 +572,44 @@
             panel.classList.remove('is-open');
             document.body.classList.remove('settings-open');
             if (shouldReload) {
-                isAutoMode = true;
-                Rotation.init();
+                // Preserve current state before reloading
+                var preservedMode = isAutoMode;
+                var preservedIndex = currentIndex;
+                // Check if preserved index is still valid after reload
+                var cfg = Config.getConfig();
+                var maxIndex = cfg.apps.length - 1;
+                if (preservedIndex > maxIndex) preservedIndex = maxIndex;
+                if (preservedIndex < 0) preservedIndex = 0;
+                
+                // Init with state preservation
+                Rotation.init(true);
+                
+                // Restore the preserved state
+                if (!preservedMode) {
+                    // Was in manual mode, restore it
+                    isAutoMode = false;
+                    Rotation.pause();
+                    // Show the preserved stream
+                    var cur = document.getElementById('frame-' + currentIndex);
+                    if (cur) cur.classList.remove('active');
+                    var selected = document.getElementById('frame-' + preservedIndex);
+                    if (selected) {
+                        selected.classList.add('active');
+                        currentIndex = preservedIndex;
+                    }
+                    Rotation.startAutoResumeTimer();
+                } else {
+                    // Was in auto mode, ensure rotation continues
+                    currentIndex = preservedIndex;
+                    var cur = document.getElementById('frame-' + currentIndex);
+                    if (cur) {
+                        // Make sure the current frame is active
+                        document.querySelectorAll('iframe').forEach(function(f) { f.classList.remove('active'); });
+                        cur.classList.add('active');
+                    }
+                    Rotation.rotate();
+                }
+                updateModeUI();
             } else {
                 Rotation.resume();
             }
