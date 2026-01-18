@@ -306,12 +306,13 @@
             <h2>Playlist Settings</h2>
             <div class="mode-control">
                 <div class="toggle-header">
-                    <span class="toggle-label">Auto Rotation:</span>
+                    <span class="toggle-label">Disable Auto Rotation:</span>
                     <label class="toggle-switch">
-                        <input type="checkbox" id="auto-rotation-enabled">
+                        <input type="checkbox" id="disable-auto-rotation">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
+                <p class="settings-hint">When enabled, auto rotation is completely disabled and streams must be selected manually.</p>
             </div>
             <div class="auto-resume-setting">
                 <div class="toggle-header">
@@ -364,7 +365,8 @@
                 var autoResume = (typeof raw.autoResumeTimeout === 'number' && !isNaN(raw.autoResumeTimeout)) 
                     ? Math.max(0, Math.min(300000, raw.autoResumeTimeout)) 
                     : 10000; // default 10 seconds (already in milliseconds)
-                return { valid: true, config: { apps: apps, autoResumeTimeout: autoResume } };
+                var disableAuto = (typeof raw.autoRotationDisabled === 'boolean') ? raw.autoRotationDisabled : false;
+                return { valid: true, config: { apps: apps, autoResumeTimeout: autoResume, autoRotationDisabled: disableAuto } };
             },
 
             getConfig: function () {
@@ -376,9 +378,12 @@
                         if (v.valid) return v.config;
                     }
                 } catch (e) { /* ignore */ }
-                var defaultConfig = Config.memoryConfig || { apps: Config.DEFAULT_APPS.slice(), autoResumeTimeout: 10000 };
+                var defaultConfig = Config.memoryConfig || { apps: Config.DEFAULT_APPS.slice(), autoResumeTimeout: 10000, autoRotationDisabled: false };
                 if (defaultConfig.autoResumeTimeout === undefined || defaultConfig.autoResumeTimeout === null) {
                     defaultConfig.autoResumeTimeout = 10000;
+                }
+                if (defaultConfig.autoRotationDisabled === undefined || defaultConfig.autoRotationDisabled === null) {
+                    defaultConfig.autoRotationDisabled = false;
                 }
                 return defaultConfig;
             },
@@ -410,6 +415,7 @@
         var isAutoMode = true; // true = auto rotation, false = manual selection
         var autoResumeTimeoutId = null;
         var autoResumeTimeout = 10000; // default 10 seconds in milliseconds
+        var autoRotationDisabled = false; // true = auto rotation completely disabled
 
         var Rotation = {
             init: function (preserveState) {
@@ -418,9 +424,10 @@
                 var cfg = Config.getConfig();
                 currentApps = cfg.apps;
                 autoResumeTimeout = (cfg.autoResumeTimeout !== undefined && cfg.autoResumeTimeout !== null) ? cfg.autoResumeTimeout : 10000;
+                autoRotationDisabled = (cfg.autoRotationDisabled === true) ? true : false;
                 if (!preserveState) {
                     currentIndex = 0;
-                    isAutoMode = true;
+                    isAutoMode = !autoRotationDisabled; // Start in auto mode only if not disabled
                 }
                 container.innerHTML = '';
                 currentApps.forEach(function (app, i) {
@@ -430,13 +437,13 @@
                     if (i === currentIndex) iframe.classList.add('active');
                     container.appendChild(iframe);
                 });
-                if (!preserveState || isAutoMode) {
+                if ((!preserveState || isAutoMode) && !autoRotationDisabled) {
                     Rotation.rotate();
                 }
             },
 
             rotate: function () {
-                if (currentApps.length === 0 || !isAutoMode) return;
+                if (currentApps.length === 0 || !isAutoMode || autoRotationDisabled) return;
                 var app = currentApps[currentIndex];
                 var nextIndex = (currentIndex + 1) % currentApps.length;
                 rotationTimeoutId = setTimeout(function () {
@@ -478,6 +485,7 @@
             },
 
             enableAuto: function () {
+                if (autoRotationDisabled) return; // Can't enable if disabled
                 isAutoMode = true;
                 Rotation.stopAutoResumeTimer();
                 Rotation.rotate();
@@ -503,6 +511,9 @@
             },
 
             onMouseMove: function () {
+                // Don't do anything if auto rotation is disabled
+                if (autoRotationDisabled) return;
+                
                 // Turn off auto rotation when mouse moves
                 if (isAutoMode) {
                     Rotation.pause();
@@ -580,6 +591,14 @@
             cfg.apps.forEach(function (a, i) { 
                 appList.appendChild(createAppRow(a, i)); 
             });
+            
+            // Disable Auto Rotation toggle
+            var disableAutoToggle = document.getElementById('disable-auto-rotation');
+            if (disableAutoToggle) {
+                disableAutoToggle.checked = (cfg.autoRotationDisabled === true);
+            }
+            
+            // Auto-resume settings
             var toggleEnabled = document.getElementById('auto-resume-enabled');
             var timeoutInput = document.getElementById('auto-resume-timeout');
             var timeInputGroup = document.getElementById('time-input-group');
@@ -604,9 +623,11 @@
         }
 
         function updateModeUI() {
-            var toggleAuto = document.getElementById('auto-rotation-enabled');
-            if (toggleAuto) {
-                toggleAuto.checked = isAutoMode;
+            // Update the disable toggle to reflect current state
+            // If auto rotation is disabled, the toggle should be checked
+            var disableToggle = document.getElementById('disable-auto-rotation');
+            if (disableToggle) {
+                disableToggle.checked = autoRotationDisabled;
             }
         }
 
@@ -639,16 +660,6 @@
             if (first) first.focus();
         }
         
-        function onAutoToggle(e) {
-            if (e.target.checked) {
-                Rotation.enableAuto();
-            } else {
-                // Toggle was turned off - pause rotation and stay on current stream
-                Rotation.pause();
-                isAutoMode = false;
-            }
-            updateStreamSelectionUI();
-        }
 
         function closeSettings(shouldReload) {
             panel.classList.remove('is-open');
@@ -711,6 +722,8 @@
                 apps.push({ id: id || 'app-' + i, url: url, duration: sec * 1000 });
             }
             if (apps.length === 0) return { err: 'At least one app is required' };
+            var disableAutoToggle = document.getElementById('disable-auto-rotation');
+            var autoRotationDisabled = disableAutoToggle ? disableAutoToggle.checked : false;
             var toggleEnabled = document.getElementById('auto-resume-enabled');
             var timeoutInput = document.getElementById('auto-resume-timeout');
             var isEnabled = toggleEnabled ? toggleEnabled.checked : false;
@@ -719,7 +732,7 @@
                 timeoutSec = timeoutInput ? parseInt(timeoutInput.value, 10) : 10;
                 if (isNaN(timeoutSec) || timeoutSec < 1 || timeoutSec > 300) return { err: 'Auto-resume timeout must be between 1 and 300 seconds when enabled' };
             }
-            return { apps: apps, autoResumeTimeout: timeoutSec * 1000 };
+            return { apps: apps, autoResumeTimeout: timeoutSec * 1000, autoRotationDisabled: autoRotationDisabled };
         }
 
         function onSave() {
@@ -746,7 +759,6 @@
             var newIndex = appList.querySelectorAll('.app-row').length;
             appList.appendChild(createAppRow(null, newIndex)); 
         });
-        document.getElementById('auto-rotation-enabled').addEventListener('change', onAutoToggle);
         document.getElementById('auto-resume-enabled').addEventListener('change', function(e) {
             var timeInputGroup = document.getElementById('time-input-group');
             if (timeInputGroup) {
@@ -754,6 +766,21 @@
                     timeInputGroup.classList.remove('hidden');
                 } else {
                     timeInputGroup.classList.add('hidden');
+                }
+            }
+        });
+        document.getElementById('disable-auto-rotation').addEventListener('change', function(e) {
+            if (e.target.checked) {
+                // Disable auto rotation - pause and stop
+                Rotation.pause();
+                isAutoMode = false;
+                Rotation.stopAutoResumeTimer();
+                updateModeUI();
+            } else {
+                // Re-enable auto rotation - can start if not in manual mode
+                if (!isAutoMode) {
+                    // If we're in manual mode, don't auto-start, just allow it to be enabled
+                    // User can manually enable via the auto rotation toggle or wait for auto-resume
                 }
             }
         });
