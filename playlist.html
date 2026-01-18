@@ -503,7 +503,17 @@
             },
 
             onMouseMove: function () {
-                if (!isAutoMode && autoResumeTimeout > 0) {
+                // Turn off auto rotation when mouse moves
+                if (isAutoMode) {
+                    Rotation.pause();
+                    isAutoMode = false;
+                    updateModeUI();
+                    // Start auto-resume timer if enabled
+                    if (autoResumeTimeout > 0) {
+                        Rotation.startAutoResumeTimer();
+                    }
+                } else if (autoResumeTimeout > 0) {
+                    // Already in manual mode, just reset the auto-resume timer
                     Rotation.startAutoResumeTimer();
                 }
             }
