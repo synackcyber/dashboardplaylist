@@ -307,8 +307,8 @@
                 }
                 if (apps.length === 0) return { valid: false };
                 var autoResume = (typeof raw.autoResumeTimeout === 'number' && !isNaN(raw.autoResumeTimeout)) 
-                    ? Math.max(0, Math.min(300000, raw.autoResumeTimeout * 1000)) 
-                    : 10000; // default 10 seconds
+                    ? Math.max(0, Math.min(300000, raw.autoResumeTimeout)) 
+                    : 10000; // default 10 seconds (already in milliseconds)
                 return { valid: true, config: { apps: apps, autoResumeTimeout: autoResume } };
             },
 
