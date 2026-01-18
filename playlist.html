@@ -598,7 +598,7 @@
         function onSave() {
             var out = collectForm();
             if (out.err) { alert(out.err); return; }
-            if (!Config.setConfig({ apps: out.apps })) { alert('Invalid configuration.'); return; }
+            if (!Config.setConfig({ apps: out.apps, autoResumeTimeout: out.autoResumeTimeout })) { alert('Invalid configuration.'); return; }
             closeSettings(true);
         }
 
