@@ -84,6 +84,31 @@
             font-family: monospace;
             font-size: 1.1rem;
         }
+        .mode-control {
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #30363d;
+        }
+        .btn-auto {
+            background: transparent;
+            border: 2px solid #00FF41;
+            color: #00FF41;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: monospace;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        .btn-auto:hover {
+            background: rgba(0,255,65,0.1);
+        }
+        .btn-auto.active {
+            background: #00FF41;
+            color: #000;
+        }
         .app-list { margin-bottom: 16px; }
         .app-row {
             display: grid;
@@ -91,6 +116,24 @@
             gap: 8px;
             align-items: center;
             margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .app-row:hover {
+            background: rgba(0,255,65,0.05);
+            border-color: #30363d;
+        }
+        .app-row.selected {
+            background: rgba(0,255,65,0.15);
+            border-color: #00FF41;
+        }
+        .app-row.selected::before {
+            content: '▶';
+            color: #00FF41;
+            margin-right: 4px;
         }
         .app-row input {
             background: #161b22;
@@ -173,6 +216,9 @@
         <div class="settings-overlay" id="settings-overlay"></div>
         <div class="settings-content">
             <h2>Playlist Settings</h2>
+            <div class="mode-control">
+                <button type="button" class="btn-auto" id="btn-auto">A - Auto Rotation</button>
+            </div>
             <div id="app-list" class="app-list"></div>
             <button type="button" class="btn-add" id="btn-add-app">+ Add App</button>
             <p class="settings-hint">Duration is in seconds (e.g. 120 = 2 min, 300 = 5 min). At least one app required.</p>
@@ -246,6 +292,7 @@
         // Iframe lifecycle, timing, transitions. Idempotent init; pause/resume for overlay.
         var rotationTimeoutId = null, currentIndex = 0, currentApps = [];
         var container = document.getElementById('app-container');
+        var isAutoMode = true; // true = auto rotation, false = manual selection
 
         var Rotation = {
             init: function () {
@@ -253,6 +300,7 @@
                 var cfg = Config.getConfig();
                 currentApps = cfg.apps;
                 currentIndex = 0;
+                isAutoMode = true;
                 container.innerHTML = '';
                 currentApps.forEach(function (app, i) {
                     var iframe = document.createElement('iframe');
@@ -265,7 +313,7 @@
             },
 
             rotate: function () {
-                if (currentApps.length === 0) return;
+                if (currentApps.length === 0 || !isAutoMode) return;
                 var app = currentApps[currentIndex];
                 var nextIndex = (currentIndex + 1) % currentApps.length;
                 rotationTimeoutId = setTimeout(function () {
@@ -283,7 +331,27 @@
                 if (rotationTimeoutId) { clearTimeout(rotationTimeoutId); rotationTimeoutId = null; }
             },
 
-            resume: function () { Rotation.rotate(); }
+            resume: function () {
+                if (isAutoMode) Rotation.rotate();
+            },
+
+            selectStream: function (index) {
+                if (index < 0 || index >= currentApps.length) return;
+                Rotation.pause();
+                isAutoMode = false;
+                var cur = document.getElementById('frame-' + currentIndex);
+                if (cur) cur.classList.remove('active');
+                var selected = document.getElementById('frame-' + index);
+                if (selected) selected.classList.add('active');
+                currentIndex = index;
+                updateModeUI();
+            },
+
+            enableAuto: function () {
+                isAutoMode = true;
+                Rotation.rotate();
+                updateModeUI();
+            }
         };
 
         // === OVERLAY ===
@@ -292,9 +360,10 @@
         var appList = document.getElementById('app-list');
         var gear = document.getElementById('settings-gear');
 
-        function createAppRow(app) {
+        function createAppRow(app, index) {
             var row = document.createElement('div');
             row.className = 'app-row';
+            row.dataset.index = index;
             var idIn = document.createElement('input');
             idIn.className = 'row-id';
             idIn.placeholder = 'Name';
@@ -320,12 +389,51 @@
             row.appendChild(urlIn);
             row.appendChild(durIn);
             row.appendChild(rm);
+            
+            // Make row clickable (but not inputs/buttons)
+            row.addEventListener('click', function(e) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+                var idx = parseInt(row.dataset.index, 10);
+                if (!isNaN(idx)) {
+                    Rotation.selectStream(idx);
+                    updateStreamSelectionUI();
+                }
+            });
+            
             return row;
         }
 
         function populateForm() {
             appList.innerHTML = '';
-            Config.getConfig().apps.forEach(function (a) { appList.appendChild(createAppRow(a)); });
+            Config.getConfig().apps.forEach(function (a, i) { 
+                appList.appendChild(createAppRow(a, i)); 
+            });
+            updateModeUI();
+            updateStreamSelectionUI();
+        }
+
+        function updateModeUI() {
+            var btnAuto = document.getElementById('btn-auto');
+            if (btnAuto) {
+                if (isAutoMode) {
+                    btnAuto.classList.add('active');
+                    btnAuto.textContent = 'A - Auto Rotation (Active)';
+                } else {
+                    btnAuto.classList.remove('active');
+                    btnAuto.textContent = 'A - Auto Rotation';
+                }
+            }
+        }
+
+        function updateStreamSelectionUI() {
+            var rows = appList.querySelectorAll('.app-row');
+            rows.forEach(function(row, i) {
+                if (!isAutoMode && i === currentIndex) {
+                    row.classList.add('selected');
+                } else {
+                    row.classList.remove('selected');
+                }
+            });
         }
 
         function openSettings() {
@@ -336,12 +444,21 @@
             var first = appList.querySelector('.row-url');
             if (first) first.focus();
         }
+        
+        function onAutoClick() {
+            Rotation.enableAuto();
+            updateStreamSelectionUI();
+        }
 
         function closeSettings(shouldReload) {
             panel.classList.remove('is-open');
             document.body.classList.remove('settings-open');
-            if (shouldReload) Rotation.init();
-            else Rotation.resume();
+            if (shouldReload) {
+                isAutoMode = true;
+                Rotation.init();
+            } else {
+                Rotation.resume();
+            }
         }
 
         function collectForm() {
@@ -376,11 +493,16 @@
 
         appList.addEventListener('click', function (e) {
             if (e.target && e.target.classList.contains('btn-remove')) {
+                e.stopPropagation();
                 var row = e.target.closest('.app-row');
                 if (row) row.remove();
             }
         });
-        document.getElementById('btn-add-app').addEventListener('click', function () { appList.appendChild(createAppRow(null)); });
+        document.getElementById('btn-add-app').addEventListener('click', function () { 
+            var newIndex = appList.querySelectorAll('.app-row').length;
+            appList.appendChild(createAppRow(null, newIndex)); 
+        });
+        document.getElementById('btn-auto').addEventListener('click', onAutoClick);
         document.getElementById('btn-save').addEventListener('click', onSave);
         document.getElementById('btn-cancel').addEventListener('click', function () { closeSettings(false); });
         document.getElementById('btn-reset').addEventListener('click', onReset);
