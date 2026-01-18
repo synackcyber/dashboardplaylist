@@ -215,6 +215,40 @@
             font-size: 11px;
             margin-top: 2px;
         }
+        .auto-resume-setting {
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #30363d;
+        }
+        .auto-resume-setting label {
+            display: block;
+            color: #e6edf3;
+            font-size: 13px;
+            margin-bottom: 8px;
+            font-family: monospace;
+        }
+        .auto-resume-setting .input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .auto-resume-setting input[type="number"] {
+            background: #161b22;
+            border: 1px solid #30363d;
+            color: #e6edf3;
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            width: 100px;
+        }
+        .auto-resume-setting input[type="number"]:focus {
+            outline: none;
+            border-color: #00FF41;
+        }
+        .auto-resume-setting .input-suffix {
+            color: #8b949e;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -229,6 +263,14 @@
             <h2>Playlist Settings</h2>
             <div class="mode-control">
                 <button type="button" class="btn-auto" id="btn-auto">A - Auto Rotation</button>
+            </div>
+            <div class="auto-resume-setting">
+                <label for="auto-resume-timeout">Auto-resume after idle (seconds):</label>
+                <div class="input-group">
+                    <input type="number" id="auto-resume-timeout" min="0" max="300" step="1" value="10">
+                    <span class="input-suffix">(0 = disabled)</span>
+                </div>
+                <p class="settings-hint">Automatically resume rotation after this many seconds of no mouse movement when in manual mode.</p>
             </div>
             <div id="app-list" class="app-list"></div>
             <button type="button" class="btn-add" id="btn-add-app">+ Add App</button>
@@ -264,7 +306,10 @@
                     apps.push({ id: id, url: a.url.trim(), duration: dur });
                 }
                 if (apps.length === 0) return { valid: false };
-                return { valid: true, config: { apps: apps } };
+                var autoResume = (typeof raw.autoResumeTimeout === 'number' && !isNaN(raw.autoResumeTimeout)) 
+                    ? Math.max(0, Math.min(300000, raw.autoResumeTimeout * 1000)) 
+                    : 10000; // default 10 seconds
+                return { valid: true, config: { apps: apps, autoResumeTimeout: autoResume } };
             },
 
             getConfig: function () {
@@ -276,7 +321,9 @@
                         if (v.valid) return v.config;
                     }
                 } catch (e) { /* ignore */ }
-                return Config.memoryConfig || { apps: Config.DEFAULT_APPS.slice() };
+                var defaultConfig = Config.memoryConfig || { apps: Config.DEFAULT_APPS.slice(), autoResumeTimeout: 10000 };
+                if (!defaultConfig.autoResumeTimeout) defaultConfig.autoResumeTimeout = 10000;
+                return defaultConfig;
             },
 
             setConfig: function (obj) {
@@ -304,12 +351,16 @@
         var rotationTimeoutId = null, currentIndex = 0, currentApps = [];
         var container = document.getElementById('app-container');
         var isAutoMode = true; // true = auto rotation, false = manual selection
+        var autoResumeTimeoutId = null;
+        var autoResumeTimeout = 10000; // default 10 seconds in milliseconds
 
         var Rotation = {
             init: function () {
                 if (rotationTimeoutId) { clearTimeout(rotationTimeoutId); rotationTimeoutId = null; }
+                if (autoResumeTimeoutId) { clearTimeout(autoResumeTimeoutId); autoResumeTimeoutId = null; }
                 var cfg = Config.getConfig();
                 currentApps = cfg.apps;
+                autoResumeTimeout = cfg.autoResumeTimeout || 10000;
                 currentIndex = 0;
                 isAutoMode = true;
                 container.innerHTML = '';
@@ -362,12 +413,38 @@
                 }
                 currentIndex = index;
                 updateModeUI();
+                Rotation.startAutoResumeTimer();
             },
 
             enableAuto: function () {
                 isAutoMode = true;
+                Rotation.stopAutoResumeTimer();
                 Rotation.rotate();
                 updateModeUI();
+            },
+
+            startAutoResumeTimer: function () {
+                Rotation.stopAutoResumeTimer();
+                if (autoResumeTimeout <= 0) return; // disabled
+                autoResumeTimeoutId = setTimeout(function () {
+                    if (!isAutoMode) {
+                        console.log('[HUD] Auto-resuming rotation after idle timeout');
+                        Rotation.enableAuto();
+                    }
+                }, autoResumeTimeout);
+            },
+
+            stopAutoResumeTimer: function () {
+                if (autoResumeTimeoutId) {
+                    clearTimeout(autoResumeTimeoutId);
+                    autoResumeTimeoutId = null;
+                }
+            },
+
+            onMouseMove: function () {
+                if (!isAutoMode && autoResumeTimeout > 0) {
+                    Rotation.startAutoResumeTimer();
+                }
             }
         };
 
@@ -428,9 +505,14 @@
 
         function populateForm() {
             appList.innerHTML = '';
-            Config.getConfig().apps.forEach(function (a, i) { 
+            var cfg = Config.getConfig();
+            cfg.apps.forEach(function (a, i) { 
                 appList.appendChild(createAppRow(a, i)); 
             });
+            var timeoutInput = document.getElementById('auto-resume-timeout');
+            if (timeoutInput) {
+                timeoutInput.value = Math.round((cfg.autoResumeTimeout || 10000) / 1000);
+            }
             updateModeUI();
             updateStreamSelectionUI();
         }
@@ -507,7 +589,10 @@
                 apps.push({ id: id || 'app-' + i, url: url, duration: sec * 1000 });
             }
             if (apps.length === 0) return { err: 'At least one app is required' };
-            return { apps: apps };
+            var timeoutInput = document.getElementById('auto-resume-timeout');
+            var timeoutSec = timeoutInput ? parseInt(timeoutInput.value, 10) : 10;
+            if (isNaN(timeoutSec) || timeoutSec < 0 || timeoutSec > 300) return { err: 'Auto-resume timeout must be between 0 and 300 seconds' };
+            return { apps: apps, autoResumeTimeout: timeoutSec * 1000 };
         }
 
         function onSave() {
@@ -542,6 +627,11 @@
         gear.addEventListener('click', openSettings);
         panel.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.preventDefault(); closeSettings(false); } });
         document.addEventListener('keydown', function (e) { if (e.ctrlKey && e.shiftKey && e.key === 'S') { e.preventDefault(); openSettings(); } });
+
+        // === MOUSE MOVEMENT TRACKING ===
+        document.addEventListener('mousemove', function() {
+            Rotation.onMouseMove();
+        });
 
         // === STARTUP ===
         Rotation.init();
