@@ -770,19 +770,17 @@
             }
         });
         document.getElementById('disable-auto-rotation').addEventListener('change', function(e) {
-            if (e.target.checked) {
+            autoRotationDisabled = e.target.checked;
+            if (autoRotationDisabled) {
                 // Disable auto rotation - pause and stop
                 Rotation.pause();
                 isAutoMode = false;
                 Rotation.stopAutoResumeTimer();
-                updateModeUI();
             } else {
                 // Re-enable auto rotation - can start if not in manual mode
-                if (!isAutoMode) {
-                    // If we're in manual mode, don't auto-start, just allow it to be enabled
-                    // User can manually enable via the auto rotation toggle or wait for auto-resume
-                }
+                // Don't auto-start, let user control it
             }
+            updateModeUI();
         });
         document.getElementById('btn-save').addEventListener('click', onSave);
         document.getElementById('btn-cancel').addEventListener('click', function () { closeSettings(false); });
