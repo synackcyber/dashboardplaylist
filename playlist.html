@@ -220,17 +220,69 @@
             padding-bottom: 16px;
             border-bottom: 1px solid #30363d;
         }
-        .auto-resume-setting label {
-            display: block;
+        .auto-resume-setting .toggle-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .auto-resume-setting .toggle-label {
             color: #e6edf3;
             font-size: 13px;
-            margin-bottom: 8px;
             font-family: monospace;
+            flex: 1;
         }
-        .auto-resume-setting .input-group {
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #30363d;
+            transition: 0.3s;
+            border-radius: 24px;
+            border: 1px solid #21262d;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 2px;
+            bottom: 2px;
+            background-color: #8b949e;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #00FF41;
+            border-color: #00FF41;
+        }
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+            background-color: #000;
+        }
+        .auto-resume-setting .time-input-group {
             display: flex;
             align-items: center;
             gap: 10px;
+            margin-top: 8px;
+            margin-left: 62px;
+        }
+        .auto-resume-setting .time-input-group.hidden {
+            display: none;
         }
         .auto-resume-setting input[type="number"] {
             background: #161b22;
@@ -265,12 +317,18 @@
                 <button type="button" class="btn-auto" id="btn-auto">A - Auto Rotation</button>
             </div>
             <div class="auto-resume-setting">
-                <label for="auto-resume-timeout">Auto-resume after idle (seconds):</label>
-                <div class="input-group">
-                    <input type="number" id="auto-resume-timeout" min="0" max="300" step="1" value="10">
-                    <span class="input-suffix">(0 = disabled)</span>
+                <div class="toggle-header">
+                    <span class="toggle-label">Auto-resume after idle:</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="auto-resume-enabled">
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-                <p class="settings-hint">Automatically resume rotation after this many seconds of no mouse movement when in manual mode.</p>
+                <div class="time-input-group hidden" id="time-input-group">
+                    <input type="number" id="auto-resume-timeout" min="1" max="300" step="1" value="10" placeholder="seconds">
+                    <span class="input-suffix">seconds</span>
+                </div>
+                <p class="settings-hint">Automatically resume rotation after the specified seconds of no mouse movement when in manual mode.</p>
             </div>
             <div id="app-list" class="app-list"></div>
             <button type="button" class="btn-add" id="btn-add-app">+ Add App</button>
@@ -322,7 +380,9 @@
                     }
                 } catch (e) { /* ignore */ }
                 var defaultConfig = Config.memoryConfig || { apps: Config.DEFAULT_APPS.slice(), autoResumeTimeout: 10000 };
-                if (!defaultConfig.autoResumeTimeout) defaultConfig.autoResumeTimeout = 10000;
+                if (defaultConfig.autoResumeTimeout === undefined || defaultConfig.autoResumeTimeout === null) {
+                    defaultConfig.autoResumeTimeout = 10000;
+                }
                 return defaultConfig;
             },
 
@@ -360,7 +420,7 @@
                 if (autoResumeTimeoutId) { clearTimeout(autoResumeTimeoutId); autoResumeTimeoutId = null; }
                 var cfg = Config.getConfig();
                 currentApps = cfg.apps;
-                autoResumeTimeout = cfg.autoResumeTimeout || 10000;
+                autoResumeTimeout = (cfg.autoResumeTimeout !== undefined && cfg.autoResumeTimeout !== null) ? cfg.autoResumeTimeout : 10000;
                 if (!preserveState) {
                     currentIndex = 0;
                     isAutoMode = true;
@@ -513,9 +573,24 @@
             cfg.apps.forEach(function (a, i) { 
                 appList.appendChild(createAppRow(a, i)); 
             });
+            var toggleEnabled = document.getElementById('auto-resume-enabled');
             var timeoutInput = document.getElementById('auto-resume-timeout');
+            var timeInputGroup = document.getElementById('time-input-group');
+            var savedTimeout = (cfg.autoResumeTimeout !== undefined && cfg.autoResumeTimeout !== null) ? cfg.autoResumeTimeout : 10000;
+            var isEnabled = savedTimeout > 0;
+            
+            if (toggleEnabled) {
+                toggleEnabled.checked = isEnabled;
+            }
             if (timeoutInput) {
-                timeoutInput.value = Math.round((cfg.autoResumeTimeout || 10000) / 1000);
+                timeoutInput.value = isEnabled ? Math.round(savedTimeout / 1000) : 10;
+            }
+            if (timeInputGroup) {
+                if (isEnabled) {
+                    timeInputGroup.classList.remove('hidden');
+                } else {
+                    timeInputGroup.classList.add('hidden');
+                }
             }
             updateModeUI();
             updateStreamSelectionUI();
@@ -629,9 +704,14 @@
                 apps.push({ id: id || 'app-' + i, url: url, duration: sec * 1000 });
             }
             if (apps.length === 0) return { err: 'At least one app is required' };
+            var toggleEnabled = document.getElementById('auto-resume-enabled');
             var timeoutInput = document.getElementById('auto-resume-timeout');
-            var timeoutSec = timeoutInput ? parseInt(timeoutInput.value, 10) : 10;
-            if (isNaN(timeoutSec) || timeoutSec < 0 || timeoutSec > 300) return { err: 'Auto-resume timeout must be between 0 and 300 seconds' };
+            var isEnabled = toggleEnabled ? toggleEnabled.checked : false;
+            var timeoutSec = 0;
+            if (isEnabled) {
+                timeoutSec = timeoutInput ? parseInt(timeoutInput.value, 10) : 10;
+                if (isNaN(timeoutSec) || timeoutSec < 1 || timeoutSec > 300) return { err: 'Auto-resume timeout must be between 1 and 300 seconds when enabled' };
+            }
             return { apps: apps, autoResumeTimeout: timeoutSec * 1000 };
         }
 
@@ -660,6 +740,16 @@
             appList.appendChild(createAppRow(null, newIndex)); 
         });
         document.getElementById('btn-auto').addEventListener('click', onAutoClick);
+        document.getElementById('auto-resume-enabled').addEventListener('change', function(e) {
+            var timeInputGroup = document.getElementById('time-input-group');
+            if (timeInputGroup) {
+                if (e.target.checked) {
+                    timeInputGroup.classList.remove('hidden');
+                } else {
+                    timeInputGroup.classList.add('hidden');
+                }
+            }
+        });
         document.getElementById('btn-save').addEventListener('click', onSave);
         document.getElementById('btn-cancel').addEventListener('click', function () { closeSettings(false); });
         document.getElementById('btn-reset').addEventListener('click', onReset);
